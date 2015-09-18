@@ -122,7 +122,8 @@ def insert_data_many(settings_filename, query_filename, data_list):
 
     return True   
 
-def retrieve_data(settings_filename, query_filename, params_dict, data_format='list'):
+def retrieve_data(settings_filename, query_filename, params_dict, data_format='list',
+                  csv_file_name='',csv_rows_to_write=100000):
     """ Run an select query with a defined set of parameters
     """
     conn = connect_to_db(settings_filename)
@@ -136,11 +137,15 @@ def retrieve_data(settings_filename, query_filename, params_dict, data_format='l
         # format into dictionary
         query_results = construct_dict(cursor)
     elif data_format == 'csv':
-        # format into dictionary
+        # format into csv
         query_results = construct_csv(cursor)
+    elif data_format == 'file':
+        # format into csv File
+        query_results = construct_csv_file(cursor,csv_file_name,csv_rows_to_write)
         
     cursor.close()
     conn.close()
+
 
     return query_results
 
@@ -178,4 +183,45 @@ def construct_csv(cursor):
         writer.writerow(row)
 
     return output.getvalue()    
+
+def construct_csv_file(cursor,file_name,row_limit=100000):
+    """ transforms the db cursor rows into a csv file string
+    """
+    if file_name =='':
+        logging.error('Csv File cannot be created without a defined filename')
+
+
+    with open(file_name,'w',newline='') as csv_file:
+        writer, output = create_writer()
+
+        header = [h[0] for h in cursor.description]
+        writer.writerow(header)
+        csv_file.write(output.getvalue())
+        #Writer closed to empty it. 
+        output.close()
+
+    while True:
+        writer, output = create_writer()
+
+        results = cursor.fetchmany(row_limit)
+        if not results:
+            break
+        with open(file_name, 'a', newline='') as csv_file:
+            writer.writerows(results)
+            csv_file.write(output.getvalue())
+            output.close()
+
+    return
+
+def create_writer():
+    """ Creates a csv file Writer.
+    :return: Returns a Writer and the associated Output
+    """
+    # python 2 and 3 handle writing files differently
+    if sys.version_info[0] <= 2:
+        output = io.BytesIO()
+    else:
+        output = io.StringIO()
+    writer = csv.writer(output)
+    return writer, output
 
